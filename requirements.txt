@@ -1,0 +1,17 @@
+# SmartHome AI Bot - Pinned Dependencies
+# =========================================
+
+# Telegram bot framework (async, v20+ API)
+python-telegram-bot==20.7
+
+# Anthropic Claude API client
+anthropic==0.104.1
+
+# Async HTTP client for Home Assistant REST API
+httpx==0.28.1
+
+# Environment variable management
+python-dotenv==1.2.2
+
+# YAML config file parser
+PyYAML==6.0.2
