@@ -1,7 +1,7 @@
 """
-llm.py — Claude AI intent parser for SmartHome AI Bot.
+llm.py — Gemini AI intent parser for SmartHome AI Bot.
 
-Sends user messages to Claude Haiku with a dynamic system prompt
+Sends user messages to Gemini Flash with a dynamic system prompt
 containing available devices and scenes. Returns structured JSON
 with the parsed intent, or a safe fallback on any failure.
 """
@@ -9,17 +9,18 @@ with the parsed intent, or a safe fallback on any failure.
 import json
 import logging
 
-import anthropic
+from google import genai
+from google.genai import types
 
 from config import ENV, CONFIG
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Anthropic client & model
+# Gemini client & model
 # ---------------------------------------------------------------------------
-_client = anthropic.Anthropic(api_key=ENV["ANTHROPIC_API_KEY"])
-MODEL = "claude-haiku-20240307"
+_client = genai.Client(api_key=ENV["GEMINI_API_KEY"])
+MODEL = "gemini-2.0-flash"
 MAX_TOKENS = 512
 
 # ---------------------------------------------------------------------------
@@ -115,7 +116,7 @@ async def parse_intent(
     user_message: str, conversation_history: list[dict]
 ) -> dict:
     """
-    Parse a user message into a structured intent dict using Claude.
+    Parse a user message into a structured intent dict using Gemini.
 
     Args:
         user_message: The raw text message from the user.
@@ -127,22 +128,41 @@ async def parse_intent(
     """
     system_prompt = _build_system_prompt()
 
-    # Build messages array: conversation history + current user message
-    messages = list(conversation_history)  # shallow copy
-    messages.append({"role": "user", "content": user_message})
+    # Build Gemini contents: convert history + current message
+    # Gemini uses "user" and "model" roles (not "assistant")
+    contents = []
+    for msg in conversation_history:
+        role = "model" if msg["role"] == "assistant" else "user"
+        contents.append(
+            types.Content(
+                role=role,
+                parts=[types.Part.from_text(text=msg["content"])],
+            )
+        )
+    contents.append(
+        types.Content(
+            role="user",
+            parts=[types.Part.from_text(text=user_message)],
+        )
+    )
 
-    logger.info("LLM request  -> model=%s  user_msg='%s'  history_len=%d",
-                MODEL, user_message[:100], len(conversation_history))
+    logger.info(
+        "LLM request  -> model=%s  user_msg='%s'  history_len=%d",
+        MODEL, user_message[:100], len(conversation_history),
+    )
 
     try:
-        response = _client.messages.create(
+        response = _client.models.generate_content(
             model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=system_prompt,
-            messages=messages,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                max_output_tokens=MAX_TOKENS,
+                temperature=0.2,
+            ),
         )
 
-        raw_text = response.content[0].text.strip()
+        raw_text = response.text.strip()
         logger.info("LLM raw response: %s", raw_text)
 
         # Parse JSON — strip markdown fences if the model wraps them anyway
@@ -157,8 +177,10 @@ async def parse_intent(
         # Validate required keys exist
         required_keys = {"action", "confidence", "reply"}
         if not required_keys.issubset(intent.keys()):
-            logger.warning("LLM response missing required keys: %s",
-                           required_keys - intent.keys())
+            logger.warning(
+                "LLM response missing required keys: %s",
+                required_keys - intent.keys(),
+            )
             return {**FALLBACK_INTENT}
 
         # Fill in any missing optional keys with None
@@ -166,29 +188,17 @@ async def parse_intent(
                      "duration_minutes", "temperature"):
             intent.setdefault(key, None)
 
-        logger.info("LLM parsed intent: action=%s device=%s scene=%s confidence=%s",
-                     intent["action"], intent.get("device"),
-                     intent.get("scene"), intent["confidence"])
+        logger.info(
+            "LLM parsed intent: action=%s device=%s scene=%s confidence=%s",
+            intent["action"], intent.get("device"),
+            intent.get("scene"), intent["confidence"],
+        )
 
         return intent
 
     except json.JSONDecodeError as exc:
         logger.error("LLM JSON parse failed: %s — raw: %s", exc, raw_text)
         return {**FALLBACK_INTENT}
-
-    except anthropic.APIConnectionError:
-        logger.error("LLM API connection failed — check internet / API key")
-        return {
-            **FALLBACK_INTENT,
-            "reply": "Cannot reach the AI service right now, please try again.",
-        }
-
-    except anthropic.RateLimitError:
-        logger.error("LLM API rate limit hit")
-        return {
-            **FALLBACK_INTENT,
-            "reply": "I'm getting too many requests, please wait a moment.",
-        }
 
     except Exception as exc:
         logger.exception("LLM unexpected error: %s", exc)

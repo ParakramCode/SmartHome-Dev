@@ -4,8 +4,8 @@
 # Telegram bot framework (async, v20+ API)
 python-telegram-bot==22.7
 
-# Anthropic Claude API client
-anthropic==0.104.1
+# Google Gemini AI client
+google-genai==2.8.0
 
 # Async HTTP client for Home Assistant REST API
 httpx==0.28.1

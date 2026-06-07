@@ -28,7 +28,7 @@ load_dotenv(dotenv_path=ENV_PATH)
 
 REQUIRED_ENV_VARS = [
     "TELEGRAM_BOT_TOKEN",
-    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY",
     "HA_BASE_URL",
     "HA_TOKEN",
 ]
