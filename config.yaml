@@ -1,50 +1,19 @@
-# =========================================
-# SmartHome AI Bot — Device & Scene Config
-# =========================================
-
-# Each device key is the friendly name used in conversation.
-# The value is the Home Assistant entity_id.
 devices:
-  geyser: switch.geyser
-  bedroom_light: light.bedroom
-  living_room_light: light.living_room
-  bedroom_ac: climate.bedroom_ac
-  main_door: lock.main_door
-  plug: switch.smart_plug
+  plug: switch.16amp_smart_plug_with_metering_socket_1
 
-# Scenes are sequences of device actions triggered by a single command.
 scenes:
   goodnight:
-    - device: bedroom_ac
-      action: turn_on
-    - device: living_room_light
+    - device: plug
       action: turn_off
-    - device: geyser
-      action: turn_off
-    - device: main_door
-      action: lock
 
   leaving_home:
-    - device: bedroom_ac
+    - device: plug
       action: turn_off
-    - device: living_room_light
-      action: turn_off
-    - device: bedroom_light
-      action: turn_off
-    - device: geyser
-      action: turn_off
-    - device: main_door
-      action: lock
 
   i_am_home:
-    - device: living_room_light
-      action: turn_on
-    - device: bedroom_ac
-      action: turn_on
-    - device: geyser
+    - device: plug
       action: turn_on
 
-# Safety alerts
 alerts:
   geyser_max_minutes: 45
   check_interval_minutes: 30
