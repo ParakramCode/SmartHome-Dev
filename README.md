@@ -32,6 +32,7 @@ Channel adapter  --->  Dispatcher  --->  Hybrid parser -(pattern | LLM)->  Inten
 | `smarthome/voice.py` | Voice-note transcription (Whisper, optional) |
 | `smarthome/energy.py` | Energy usage reports from metering devices |
 | `main.py` | Boots everything in one asyncio process |
+| `old_bak/` | Original single-user Telegram/Gemini prototype, archived for reference (not used) |
 
 **Design contract:** the parser and LLM both emit a single `Intent`
 (`smarthome/intents.py`); the executor consumes it. `device`/`scene` values are
@@ -97,3 +98,12 @@ cloudflared tunnel --url http://localhost:3000
 
 Set `HA_RESTART_CMD` in `.env` so the watchdog can restart Home Assistant if it
 goes down (e.g. `sudo systemctl restart home-assistant@homeassistant`).
+
+## Project history
+
+This started as a single-user Telegram bot using Gemini for intent parsing
+(preserved in `old_bak/`). It was rebuilt into the multi-flat `smarthome/`
+platform: WhatsApp + Telegram channels, a hybrid pattern/LLM parser, a SQLite
+user registry, an admin panel, scheduling, voice notes, energy reporting, and a
+reliability watchdog.
+
