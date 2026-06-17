@@ -1,19 +1,55 @@
-devices:
-  plug: switch.16amp_smart_plug_with_metering_socket_1
+# =============================================================================
+# SmartHome platform configuration
+# -----------------------------------------------------------------------------
+# This file defines GLOBAL, building-wide settings:
+#   - device_types : the canonical kinds of device every flat may have
+#   - scenes       : multi-device routines, expressed in canonical device types
+#   - settings     : runtime tunables
+#
+# It does NOT define per-flat entity IDs. Those live in the user registry
+# (SQLite), because each flat maps these canonical device types to its own
+# Home Assistant entity IDs. See smarthome/registry.py.
+# =============================================================================
 
+# Canonical device types. Each flat's registry maps these keys to real
+# Home Assistant entity IDs (e.g. ac -> climate.flat_b204_ac).
+device_types:
+  ac:
+    domain: climate
+    actions: [turn_on, turn_off, set_temperature]
+  lights:
+    domain: light
+    actions: [turn_on, turn_off]
+  lock:
+    domain: lock
+    actions: [lock, unlock]
+  geyser:
+    domain: switch
+    actions: [turn_on, turn_off]
+  plug:
+    domain: switch
+    actions: [turn_on, turn_off]
+
+# Scenes: one phrase -> several actions. Written in canonical device types;
+# resolved to a specific flat's entities at execution time.
 scenes:
   goodnight:
-    - device: plug
-      action: turn_off
-
+    - {device: lights, action: turn_off}
+    - {device: ac, action: turn_off}
+    - {device: lock, action: lock}
   leaving_home:
-    - device: plug
-      action: turn_off
-
+    - {device: lights, action: turn_off}
+    - {device: ac, action: turn_off}
+    - {device: lock, action: lock}
   i_am_home:
-    - device: plug
-      action: turn_on
+    - {device: lights, action: turn_on}
+    - {device: lock, action: unlock}
 
-alerts:
-  geyser_max_minutes: 45
-  check_interval_minutes: 30
+# Runtime tunables.
+settings:
+  rate_limit_per_minute: 20      # max commands per user per minute
+  ha_timeout_seconds: 5          # Home Assistant request timeout
+  watchdog_interval_minutes: 5   # how often the watchdog pings HA
+  max_message_chars: 100         # parse only the first N chars of a message
+  conversation_history: 10       # LLM context: last N exchanges per user
+  energy_rate_per_unit: 8.0      # ₹ per kWh, used for energy reports

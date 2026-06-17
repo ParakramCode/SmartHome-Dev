@@ -1,17 +1,30 @@
-# SmartHome AI Bot - Pinned Dependencies
+# SmartHome platform — dependencies
 # =========================================
 
-# Telegram bot framework (async, v20+ API)
-python-telegram-bot==22.7
+# --- Messaging channels ---
+python-telegram-bot==22.7      # Telegram dev/test channel
 
-# Google Gemini AI client
-google-genai==2.8.0
+# --- LLM (hybrid parser fallback) ---
+google-genai==2.8.0            # Google Gemini client
 
-# Async HTTP client for Home Assistant REST API
-httpx==0.28.1
+# --- HTTP / web ---
+httpx==0.28.1                  # async client for Home Assistant + WhatsApp
+fastapi==0.118.0              # webhook + admin API
+uvicorn[standard]==0.34.0     # ASGI server
+itsdangerous==2.2.0           # signed admin session cookies
+python-multipart==0.0.20      # form parsing (admin login)
 
-# Environment variable management
-python-dotenv==1.2.2
+# --- Scheduling ---
+APScheduler==3.11.0           # recurring/scheduled commands
 
-# YAML config file parser
-PyYAML==6.0.2
+# --- Config ---
+python-dotenv==1.2.2          # .env loading
+PyYAML==6.0.2                 # config.yaml parsing
+
+# --- Voice notes (transcription) ---
+# Whisper is heavy (pulls torch). Installed separately when the voice
+# feature is enabled:  pip install openai-whisper
+
+# --- Dev / testing ---
+pytest==9.1.0
+pytest-asyncio==1.4.0

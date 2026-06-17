@@ -4,3 +4,13 @@ __pycache__/
 *.pyc
 .DS_Store
 *.log
+
+# Local data
+*.db
+*.db-wal
+*.db-shm
+
+# Local-only working files
+CLAUDE.md
+user_feedback.md
+SmartHome_MVP_ProjectBrief.md
