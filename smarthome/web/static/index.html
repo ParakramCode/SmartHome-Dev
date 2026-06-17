@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartHome · Admin</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <!-- Login -->
+  <div id="login" class="login hidden">
+    <form class="card" method="post" action="/admin/login">
+      <h1>SmartHome Admin</h1>
+      <p class="muted">Enter the admin password to continue.</p>
+      <input type="password" name="password" placeholder="Admin password" autofocus required />
+      <button type="submit">Sign in</button>
+      <p id="login-error" class="error hidden">Wrong password.</p>
+    </form>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dash" class="dash hidden">
+    <header>
+      <h1>🏠 SmartHome Admin</h1>
+      <div class="header-right">
+        <span id="ha-status" class="pill">HA: …</span>
+        <form method="post" action="/admin/logout"><button class="ghost">Log out</button></form>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button data-tab="users" class="active">Users</button>
+      <button data-tab="logs">Command Log</button>
+      <button data-tab="stats">Usage Stats</button>
+    </nav>
+
+    <!-- Users -->
+    <section id="tab-users" class="tab">
+      <div class="row-between">
+        <h2>Registered Users</h2>
+        <button id="show-add" class="primary">+ Add user</button>
+      </div>
+
+      <form id="add-form" class="card add-form hidden">
+        <div class="grid">
+          <label>Flat <input name="flat" placeholder="B-204" required /></label>
+          <label>Name <input name="name" placeholder="Resident name" /></label>
+          <label>WhatsApp # <input name="whatsapp_number" placeholder="919876543210" /></label>
+          <label>Telegram ID <input name="telegram_id" placeholder="123456789" /></label>
+        </div>
+        <p class="muted">Entity IDs (Home Assistant) for this flat:</p>
+        <div class="grid">
+          <label>AC <input name="ac" placeholder="climate.flat_b204_ac" /></label>
+          <label>Lights <input name="lights" placeholder="light.flat_b204_main" /></label>
+          <label>Lock <input name="lock" placeholder="lock.flat_b204_door" /></label>
+          <label>Geyser <input name="geyser" placeholder="switch.flat_b204_geyser" /></label>
+          <label>Plug <input name="plug" placeholder="switch.flat_b204_plug" /></label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary">Save</button>
+          <button type="button" id="cancel-add" class="ghost">Cancel</button>
+        </div>
+        <p id="add-error" class="error hidden"></p>
+      </form>
+
+      <div id="users-table"></div>
+    </section>
+
+    <!-- Logs -->
+    <section id="tab-logs" class="tab hidden">
+      <div class="row-between">
+        <h2>Recent Commands</h2>
+        <button id="refresh-logs" class="ghost">↻ Refresh</button>
+      </div>
+      <div id="logs-table"></div>
+    </section>
+
+    <!-- Stats -->
+    <section id="tab-stats" class="tab hidden">
+      <h2>Usage by User</h2>
+      <div id="stats-table"></div>
+    </section>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
