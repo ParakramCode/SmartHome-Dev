@@ -1,0 +1,19 @@
+[Unit]
+Description=SmartHome AI Platform (WhatsApp/Telegram -> Home Assistant)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust User and paths to your install.
+User=pi
+WorkingDirectory=/home/pi/smarthome
+ExecStart=/home/pi/smarthome/venv/bin/python main.py
+EnvironmentFile=/home/pi/smarthome/.env
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
