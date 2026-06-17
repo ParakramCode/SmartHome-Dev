@@ -10,6 +10,10 @@ __pycache__/
 *.db-wal
 *.db-shm
 
+# Local Home Assistant test instance — keep only the seed config
+dev/homeassistant/config/*
+!dev/homeassistant/config/configuration.yaml
+
 # Local-only working files
 CLAUDE.md
 user_feedback.md

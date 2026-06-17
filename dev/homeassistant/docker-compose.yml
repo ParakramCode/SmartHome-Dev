@@ -1,0 +1,22 @@
+# Local Home Assistant for testing the SmartHome bot on your laptop.
+# This is the "Container" install (NOT Home Assistant OS) — perfect for dev.
+#
+#   cd dev/homeassistant
+#   docker compose up -d
+#   open http://localhost:8123
+#
+# The pre-seeded config/configuration.yaml creates one flat's worth of fake
+# devices (lights, geyser, plug, AC, door lock) so you can map them in the
+# admin panel and watch real Home Assistant state change.
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: smarthome-ha
+    environment:
+      - TZ=Asia/Kolkata
+    volumes:
+      - ./config:/config
+    ports:
+      - "8123:8123"
+    restart: unless-stopped

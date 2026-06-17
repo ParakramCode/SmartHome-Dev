@@ -1,0 +1,67 @@
+# Pre-seeded Home Assistant config for LOCAL TESTING of the SmartHome bot.
+# Creates one flat's worth of fake devices covering every canonical device type
+# (lights, geyser, plug, AC, door lock) so you can map them in the admin panel
+# and watch real Home Assistant state change when the bot runs commands.
+#
+# Entity IDs created (map these in the SmartHome admin panel):
+#   lights -> input_boolean.flat_b204_lights
+#   geyser -> input_boolean.flat_b204_geyser
+#   plug   -> input_boolean.flat_b204_plug
+#   ac     -> climate.flat_b204_ac
+#   lock   -> lock.flat_b204_door
+
+default_config:
+
+# Toggle helpers behaving as lights / geyser / plug (domain: input_boolean,
+# which supports turn_on / turn_off — exactly what the bot calls).
+input_boolean:
+  flat_b204_lights:
+    name: Flat B204 Lights
+  flat_b204_geyser:
+    name: Flat B204 Geyser
+  flat_b204_plug:
+    name: Flat B204 Plug
+  flat_b204_ac_switch:
+    name: Flat B204 AC heater (internal)
+  flat_b204_lock_state:
+    name: Flat B204 Lock state (internal)
+
+# Target temperature backing the AC.
+input_number:
+  flat_b204_ac_temp:
+    name: Flat B204 AC target temp
+    min: 16
+    max: 32
+    step: 1
+    unit_of_measurement: "°C"
+
+# A real sensor entity the thermostat can read.
+template:
+  - sensor:
+      - name: Flat B204 AC temp sensor
+        unique_id: flat_b204_ac_temp_sensor
+        unit_of_measurement: "°C"
+        state: "{{ states('input_number.flat_b204_ac_temp') }}"
+
+# A real climate entity — supports set_temperature and turn_on/turn_off.
+climate:
+  - platform: generic_thermostat
+    name: Flat B204 AC
+    unique_id: flat_b204_ac
+    heater: input_boolean.flat_b204_ac_switch
+    target_sensor: sensor.flat_b204_ac_temp_sensor
+
+# A real lock entity backed by a helper — supports lock / unlock.
+lock:
+  - platform: template
+    name: Flat B204 Door
+    unique_id: flat_b204_door
+    value_template: "{{ is_state('input_boolean.flat_b204_lock_state', 'on') }}"
+    lock:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.flat_b204_lock_state
+    unlock:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.flat_b204_lock_state
