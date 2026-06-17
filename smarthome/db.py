@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS schedules (
 CREATE TABLE IF NOT EXISTS messages (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER NOT NULL,        -- FK -> users.id
+    channel     TEXT NOT NULL DEFAULT 'telegram',  -- per-instance memory
     role        TEXT NOT NULL,           -- user | assistant
     content     TEXT NOT NULL,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -93,8 +94,16 @@ def connect() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Lightweight, idempotent migrations for existing databases."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(messages)").fetchall()]
+    if cols and "channel" not in cols:
+        conn.execute("ALTER TABLE messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'telegram'")
+
+
 def init_db() -> None:
-    """Create tables and indexes if they don't exist."""
+    """Create tables and indexes if they don't exist; run migrations."""
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
     logger.info("SQLite ready at %s", DB_PATH)

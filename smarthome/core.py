@@ -20,7 +20,7 @@ from typing import Awaitable, Callable
 from .config import settings
 from .ha_client import HomeAssistantClient
 from .ratelimit import RateLimiter
-from . import registry, parser, executor, command_log, messages, memory
+from . import registry, parser, executor, command_log, messages, memory, lang
 from .intents import Intent
 from .registry import User
 
@@ -36,31 +36,34 @@ class Dispatcher:
     def __init__(self, ha: HomeAssistantClient | None = None):
         self.ha = ha or HomeAssistantClient()
         self.rate = RateLimiter()
-        self._history: dict[int, list[dict]] = {}
+        # Keyed by (user_id, channel) so each instance is individual — a flat's
+        # Telegram chat and WhatsApp chat never share memory.
+        self._history: dict[tuple[int, str], list[dict]] = {}
         # Optional hook set by the scheduler module (task: scheduling).
         self.schedule_handler = None
 
-    # -- conversation history (persistent, SQLite-backed) ---------------------
-    def _history_for(self, user_id: int) -> list[dict]:
-        # Lazily load a user's stored history into the in-memory cache so it
-        # survives restarts (the bot "remembers" past exchanges).
-        if user_id not in self._history:
-            self._history[user_id] = memory.load_recent(user_id, settings.conversation_history * 2)
-        return self._history[user_id]
+    # -- conversation history (persistent, SQLite-backed, per user+channel) ----
+    def _history_for(self, user_id: int, channel: str) -> list[dict]:
+        # Lazily load this instance's stored history into the in-memory cache so
+        # it survives restarts (the bot "remembers" past exchanges).
+        key = (user_id, channel)
+        if key not in self._history:
+            self._history[key] = memory.load_recent(user_id, channel, settings.conversation_history * 2)
+        return self._history[key]
 
-    def _remember(self, user_id: int, role: str, content: str) -> None:
+    def _remember(self, user_id: int, channel: str, role: str, content: str) -> None:
         limit = settings.conversation_history * 2
-        hist = self._history_for(user_id)
+        hist = self._history_for(user_id, channel)
         hist.append({"role": role, "content": content})
         if len(hist) > limit:
-            self._history[user_id] = hist[-limit:]
+            self._history[(user_id, channel)] = hist[-limit:]
         # Persist + trim so memory outlives restarts.
-        memory.add_message(user_id, role, content)
-        memory.trim(user_id, limit)
+        memory.add_message(user_id, channel, role, content)
+        memory.trim(user_id, channel, limit)
 
-    def clear_history(self, user_id: int) -> None:
-        self._history.pop(user_id, None)
-        memory.clear(user_id)
+    def clear_history(self, user_id: int, channel: str) -> None:
+        self._history.pop((user_id, channel), None)
+        memory.clear(user_id, channel)
 
     # -- main entry point -----------------------------------------------------
     async def handle(
@@ -90,18 +93,18 @@ class Dispatcher:
                 latency_ms=int((time.monotonic() - started) * 1000),
                 error_message="unregistered",
             )
-            return messages.NOT_REGISTERED
+            return lang.system("not_registered", lang.detect(message))
 
         # 2) Rate limit.
         if not self.rate.allow(f"{channel}:{user.id}"):
             logger.warning("Rate limited user id=%d on %s", user.id, channel)
-            return messages.RATE_LIMITED
+            return lang.system("rate_limited", lang.detect(message))
 
         if not message:
-            return messages.UNKNOWN
+            return lang.system("unknown", lang.detect(message))
 
-        # 3) Parse.
-        intent: Intent = await parser.parse(message, self._history_for(user.id))
+        # 3) Parse (with this instance's own history).
+        intent: Intent = await parser.parse(message, self._history_for(user.id, channel))
 
         # 4) Execute.
         try:
@@ -115,8 +118,8 @@ class Dispatcher:
             error_message = str(exc)
 
         # 5) Bookkeeping.
-        self._remember(user.id, "user", message)
-        self._remember(user.id, "assistant", intent.reply or reply)
+        self._remember(user.id, channel, "user", message)
+        self._remember(user.id, channel, "assistant", intent.reply or reply)
         registry.touch_activity(user.id)
 
         success = error_message is None and reply not in _FAILURE_REPLIES and intent.action != "unclear"

@@ -18,6 +18,7 @@ import logging
 
 from ..config import settings, device_types, scenes
 from ..intents import Intent, from_llm_dict, fallback
+from .. import lang as lang_mod
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,10 @@ Schema:
 9. Setting a temperature -> action "set_temperature", device "ac", temperature <int>.
 10. Asking about energy/electricity usage or bill -> action "energy".
 10b. Asking for help, a menu, or what they can control -> action "help".
-11. Always reply in the same language the user wrote in.
+11. LANGUAGE: reply in the SAME language as the user's CURRENT message ONLY.
+    English message -> reply in English. Romanized Hinglish -> reply in Hinglish.
+    Devanagari Hindi -> reply in Devanagari Hindi. Do NOT default to Hindi/Hinglish
+    for an English message, and do NOT switch languages based on earlier messages.
 12. Keep replies short, friendly, conversational — like a helpful housemate.
 13. For locks use action "lock"/"unlock", not "turn_on"/"turn_off".
 """
@@ -102,7 +106,14 @@ async def parse(user_message: str, conversation_history: list[dict]) -> Intent |
 
     from google.genai import types
 
-    system_prompt = _build_system_prompt()
+    # Steer the reply language to the user's current message (strongest signal).
+    lang_code = lang_mod.detect(user_message)
+    system_prompt = _build_system_prompt() + (
+        f"\n\n=== REPLY LANGUAGE (STRICT) ===\n"
+        f"The user's current message is in {lang_mod.LABELS[lang_code]}. "
+        f"Write the 'reply' field ONLY in {lang_mod.LABELS[lang_code]}, "
+        f"matching its script. Ignore the language of any earlier messages."
+    )
 
     contents = []
     for msg in conversation_history:

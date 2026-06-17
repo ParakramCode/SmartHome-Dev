@@ -50,7 +50,7 @@ def build_app(dispatcher: Dispatcher) -> Application:
     async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         known = registry.get_by_telegram(update.effective_user.id)
         if known:
-            dispatcher.clear_history(known.id)
+            dispatcher.clear_history(known.id, "telegram")
         await update.message.reply_text("🧹 Conversation history cleared!")
 
     async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

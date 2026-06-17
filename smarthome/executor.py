@@ -20,7 +20,7 @@ from .config import scenes as get_scenes, device_types
 from .intents import Intent
 from .ha_client import HomeAssistantClient
 from .registry import User
-from . import messages, energy, bg
+from . import messages, energy, bg, lang
 
 logger = logging.getLogger(__name__)
 
@@ -134,18 +134,18 @@ async def execute(
     if action == "query" and intent.device:
         entity = user.resolve(intent.device)
         if not entity:
-            return messages.NO_SUCH_DEVICE.format(device=intent.device)
+            return lang.system("no_such_device", intent.lang, device=intent.device)
         state = await ha.get_state(entity)
         if state is None:
-            return messages.HA_DOWN
+            return lang.system("ha_down", intent.lang)
         prefix = intent.reply + "\n" if intent.reply else ""
-        return f"{prefix}{intent.device} is currently: {state}"
+        return prefix + lang.query(intent.device, state, intent.lang)
 
     # --- Device control (incl. temperature) ---
     if action in ("turn_on", "turn_off", "lock", "unlock", "set_temperature") and intent.device:
         entity = user.resolve(intent.device)
         if not entity:
-            return messages.NO_SUCH_DEVICE.format(device=intent.device)
+            return lang.system("no_such_device", intent.lang, device=intent.device)
 
         # turn_on carrying a temperature is treated as set_temperature.
         effective = action
@@ -154,9 +154,9 @@ async def execute(
 
         ok = await _do_action(ha, effective, entity, temperature=intent.temperature)
         if not ok:
-            return messages.HA_DOWN
+            return lang.system("ha_down", intent.lang)
 
-        reply = intent.reply or messages.confirm(intent.device, effective, temperature=intent.temperature)
+        reply = intent.reply or lang.confirm(intent.device, effective, intent.lang, temperature=intent.temperature)
 
         # Auto-off timer.
         if effective == "turn_on" and intent.duration_minutes:
@@ -168,4 +168,4 @@ async def execute(
         return reply
 
     # --- Unclear / fallback ---
-    return intent.reply or messages.UNKNOWN
+    return intent.reply or lang.system("unknown", intent.lang)

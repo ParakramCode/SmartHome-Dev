@@ -54,13 +54,24 @@ async def test_memory_persists_across_restart(ha, user):
     d1 = Dispatcher(ha=ha)
     await d1.handle(channel="telegram", message="lights on", telegram_id=user.telegram_id)
     d2 = Dispatcher(ha=ha)
-    contents = [m["content"] for m in d2._history_for(user.id)]
+    contents = [m["content"] for m in d2._history_for(user.id, "telegram")]
     assert "lights on" in contents
 
 
 async def test_clear_history_wipes_memory(ha, user):
     d = Dispatcher(ha=ha)
     await d.handle(channel="telegram", message="lights on", telegram_id=user.telegram_id)
-    d.clear_history(user.id)
+    d.clear_history(user.id, "telegram")
     d2 = Dispatcher(ha=ha)
-    assert d2._history_for(user.id) == []
+    assert d2._history_for(user.id, "telegram") == []
+
+
+async def test_memory_is_per_channel(ha, user):
+    # Same flat, two channels -> separate memory (instances are individual).
+    d = Dispatcher(ha=ha)
+    await d.handle(channel="telegram", message="lights on", telegram_id=user.telegram_id)
+    await d.handle(channel="whatsapp", message="ac off", whatsapp_number=user.whatsapp_number)
+    tg = [m["content"] for m in d._history_for(user.id, "telegram")]
+    wa = [m["content"] for m in d._history_for(user.id, "whatsapp")]
+    assert "lights on" in tg and "ac off" not in tg
+    assert "ac off" in wa and "lights on" not in wa

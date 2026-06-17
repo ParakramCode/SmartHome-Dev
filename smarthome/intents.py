@@ -38,6 +38,7 @@ class Intent:
     confidence: str = "high"             # high | medium | low
     reply: str = ""                      # conversational reply (LLM fills this)
     source: str = "pattern"              # pattern | llm | none
+    lang: str = "en"                     # en | hinglish | hi (of the user's message)
 
     def as_dict(self) -> dict:
         return asdict(self)
