@@ -25,7 +25,7 @@ Channel adapter  --->  Dispatcher  --->  Hybrid parser -(pattern | LLM)->  Inten
 | `smarthome/parser/` | `patterns.py` (fast) + `llm.py` (Gemini) behind `parse()` |
 | `smarthome/executor.py` | Intent -> Home Assistant actions (per-flat) |
 | `smarthome/core.py` | `Dispatcher`: auth -> rate-limit -> parse -> execute -> log |
-| `smarthome/channels/` | `telegram.py` (dev) + `whatsapp.py` (production) |
+| `smarthome/channels/` | `telegram.py` (dev); `whatsapp.py` facade over `whatsapp_meta.py` (Meta) / `whapi.py` (Whapi.Cloud) |
 | `smarthome/web/` | FastAPI: WhatsApp webhook, `/health`, admin panel |
 | `smarthome/scheduler.py` | Recurring/one-off commands (APScheduler) |
 | `smarthome/watchdog.py` | HA health monitor + admin alerts + auto-restart |
@@ -59,6 +59,30 @@ switches on once its vars are present:
 
 Devices, scenes, and tunables live in `config.yaml`. Per-flat entity mappings
 are managed through the admin panel (stored in SQLite).
+
+## WhatsApp providers (Meta vs Whapi)
+
+WhatsApp is provider-agnostic — pick one with `WHATSAPP_PROVIDER` and set that
+provider's env vars. Everything else (parser, executor, admin, dispatcher) is
+identical; the only WhatsApp-specific code lives in `smarthome/channels/`.
+
+| | `meta` (official) | `whapi` (Whapi.Cloud) |
+|---|---|---|
+| Basis | Meta WhatsApp Business Cloud API | Unofficial gateway over WhatsApp Web |
+| Setup | Meta business verification + app approval | Link a dedicated number via QR in the Whapi panel |
+| Number | Dedicated; can't be used in the normal app | Dedicated; **not** your personal number |
+| Proactive msgs | Need approved templates / 24h window | No restriction |
+| Cost | Per-conversation pricing | Fixed price, unlimited messages |
+| Risk | Compliant, stable | Against Meta ToS — number can be **banned** |
+| Best for | Production at scale | Fast pilot / unblocked development |
+
+- **`meta`** — set `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`,
+  `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` (HMAC webhook check).
+- **`whapi`** — set `WHAPI_TOKEN` (from `panel.whapi.cloud`); optionally
+  `WHAPI_WEBHOOK_SECRET`. Point your Whapi channel's webhook at `POST /webhook`.
+
+Both deliver inbound messages to `POST /webhook` and reply via the provider's
+API. You need a **dedicated WhatsApp number** either way — never your personal one.
 
 ## Admin panel
 

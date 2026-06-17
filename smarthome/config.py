@@ -88,11 +88,16 @@ class Settings:
     telegram_bot_token: str | None
 
     # --- WhatsApp production channel (optional until Meta is approved) ---
+    whatsapp_provider: str            # "meta" (official) | "whapi" (unofficial gateway)
     whatsapp_token: str | None
     whatsapp_phone_number_id: str | None
     whatsapp_verify_token: str | None
     whatsapp_app_secret: str | None
     whatsapp_business_account_id: str | None
+    # Whapi.Cloud (used when whatsapp_provider == "whapi")
+    whapi_token: str | None
+    whapi_api_url: str
+    whapi_webhook_secret: str | None
 
     # --- Admin panel ---
     admin_password: str | None
@@ -125,6 +130,8 @@ class Settings:
 
     @property
     def whatsapp_enabled(self) -> bool:
+        if self.whatsapp_provider == "whapi":
+            return bool(self.whapi_token)
         return all(
             (
                 self.whatsapp_token,
@@ -155,11 +162,15 @@ def _load_settings() -> Settings:
         ha_token=ha_token,
         gemini_api_key=_env("GEMINI_API_KEY"),
         telegram_bot_token=_env("TELEGRAM_BOT_TOKEN"),
+        whatsapp_provider=(_env("WHATSAPP_PROVIDER", default="meta") or "meta").lower(),
         whatsapp_token=_env("WHATSAPP_TOKEN"),
         whatsapp_phone_number_id=_env("WHATSAPP_PHONE_NUMBER_ID"),
         whatsapp_verify_token=_env("WHATSAPP_VERIFY_TOKEN"),
         whatsapp_app_secret=_env("WHATSAPP_APP_SECRET"),
         whatsapp_business_account_id=_env("WHATSAPP_BUSINESS_ACCOUNT_ID"),
+        whapi_token=_env("WHAPI_TOKEN"),
+        whapi_api_url=(_env("WHAPI_API_URL", default="https://gate.whapi.cloud") or "").rstrip("/"),
+        whapi_webhook_secret=_env("WHAPI_WEBHOOK_SECRET"),
         admin_password=_env("ADMIN_PASSWORD"),
         session_secret=_env("SESSION_SECRET", default="change-me-in-production"),
         admin_whatsapp=_env("ADMIN_WHATSAPP"),
@@ -201,7 +212,7 @@ def print_startup_summary() -> None:
     """Log a human-readable summary of what's enabled."""
     enabled = []
     if settings.whatsapp_enabled:
-        enabled.append("WhatsApp")
+        enabled.append(f"WhatsApp({settings.whatsapp_provider})")
     if settings.telegram_enabled:
         enabled.append("Telegram")
     if settings.llm_enabled:

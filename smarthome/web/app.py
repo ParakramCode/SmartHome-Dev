@@ -59,6 +59,9 @@ def create_app(dispatcher: Dispatcher, whatsapp_channel: WhatsAppChannel | None 
     # ===================== WhatsApp webhook =====================
     @app.get("/webhook")
     async def webhook_verify(request: Request):
+        # Whapi has no GET handshake; only Meta verifies on GET.
+        if settings.whatsapp_provider == "whapi":
+            return PlainTextResponse("ok")
         params = request.query_params
         challenge = wa.verify_webhook(
             params.get("hub.mode"),
@@ -72,7 +75,7 @@ def create_app(dispatcher: Dispatcher, whatsapp_channel: WhatsAppChannel | None 
     @app.post("/webhook")
     async def webhook_receive(request: Request):
         raw = await request.body()
-        if not wa.verify_signature(raw, request.headers.get("X-Hub-Signature-256")):
+        if not wa.verify_signature(raw, request.headers):
             raise HTTPException(status_code=403, detail="Bad signature")
         payload = await request.json()
         if whatsapp_channel is not None:

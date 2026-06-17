@@ -29,11 +29,12 @@ def test_verify_webhook():
 
 
 def test_signature(monkeypatch):
+    monkeypatch.setattr(settings, "whatsapp_provider", "meta")
     monkeypatch.setattr(settings, "whatsapp_app_secret", "topsecret")
     body = b'{"hello":"world"}'
     sig = "sha256=" + hmac.new(b"topsecret", body, hashlib.sha256).hexdigest()
-    assert wa.verify_signature(body, sig) is True
-    assert wa.verify_signature(body, "sha256=deadbeef") is False
+    assert wa.verify_signature(body, {"X-Hub-Signature-256": sig}) is True
+    assert wa.verify_signature(body, {"X-Hub-Signature-256": "sha256=deadbeef"}) is False
 
 
 # ---- Scheduler triggers ----
