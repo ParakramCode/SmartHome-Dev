@@ -35,6 +35,15 @@ QUERY_WORDS = ["status", "on hai", "chal raha", "chalu hai", "band hai", "kitna"
 # immediate command. Defer these to the LLM.
 SCHEDULE_CUES = ("tomorrow", "tonight", "everyday", "every day", "daily", "roz", "subah", "shaam", "kal")
 
+# Help / capability discovery.
+HELP_PHRASES = (
+    "help", "menu", "madad", "what can you do", "what can i", "how to use",
+    "commands", "kya kar sakte", "kaise use", "what devices", "my devices",
+)
+
+# Cap auto-off duration to a sane maximum (24h) to avoid runaway timers.
+MAX_DURATION_MINUTES = 24 * 60
+
 # Scene trigger phrases (in addition to the scene name itself).
 SCENE_PHRASES = {
     "goodnight": ["goodnight", "good night", "so raha", "sone ja", "sleeping", "shubh ratri"],
@@ -43,7 +52,7 @@ SCENE_PHRASES = {
 }
 
 _WORD = re.compile(r"[a-z0-9']+")
-_DURATION_RE = re.compile(r"(\d{1,3})\s*(?:min|minit|minute|minutes)\b")
+_DURATION_RE = re.compile(r"(\d+)\s*(?:m|min|mins|minit|minute|minutes)\b")
 _TEMP_RE = re.compile(r"(\d{2})\s*(?:degree|degrees|deg|°|c\b)")
 
 
@@ -79,7 +88,7 @@ def _find_scene(text: str) -> str | None:
         if scene not in scenes:
             continue
         for phrase in phrases:
-            if phrase in text:
+            if _contains_word(text, phrase):
                 return scene
     return None
 
@@ -89,7 +98,7 @@ def _is_query(text: str) -> bool:
         return True
     if text.startswith(QUERY_PREFIXES):
         return True
-    return any(q in text for q in QUERY_WORDS)
+    return any(_contains_word(text, q) for q in QUERY_WORDS)
 
 
 def _any(text: str, words: list[str]) -> bool:
@@ -101,6 +110,10 @@ def match(text: str) -> Intent | None:
     norm = _normalize(text)
     if not norm:
         return None
+
+    # 0-) Help / menu / what can I control.
+    if any(p in norm for p in HELP_PHRASES):
+        return Intent(action="help", confidence="high", source="pattern")
 
     # 0) Energy / usage / bill enquiry.
     if any(w in norm for w in ("energy", "usage", "electricity", "bijli", "bill", "consumption", "units")):
@@ -145,6 +158,8 @@ def match(text: str) -> Intent | None:
 
     duration_match = _DURATION_RE.search(norm)
     duration = int(duration_match.group(1)) if duration_match else None
+    if duration is not None:
+        duration = min(duration, MAX_DURATION_MINUTES)
 
     # 2b) Lock-type devices map on/off + open/close to lock/unlock.
     if device == "lock":

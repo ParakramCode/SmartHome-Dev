@@ -98,7 +98,10 @@ Home Assistant status, and manually toggle devices.
 - Status: `is the AC on?`
 - Scheduling: `every day at 6am turn on geyser`, `show my schedules`, `cancel my schedules`
 - Energy: `my energy usage`
+- Help: `help` / `menu` / `what can I control` — lists the flat's own devices
 - Voice notes (WhatsApp, if Whisper installed)
+
+Scheduled times use the `timezone` in `config.yaml` (default `Asia/Kolkata`).
 
 ## Testing
 

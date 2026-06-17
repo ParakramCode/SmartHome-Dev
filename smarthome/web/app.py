@@ -39,7 +39,7 @@ from ..config import settings
 from ..core import Dispatcher
 from ..channels import whatsapp as wa
 from ..channels.whatsapp import WhatsAppChannel
-from .. import registry, command_log
+from .. import registry, command_log, bg
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,12 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 def create_app(dispatcher: Dispatcher, whatsapp_channel: WhatsAppChannel | None = None) -> FastAPI:
     app = FastAPI(title="SmartHome", docs_url=None, redoc_url=None)
-    app.add_middleware(SessionMiddleware, secret_key=settings.session_secret)
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.session_secret,
+        same_site="strict",
+        https_only=(settings.app_env == "production"),
+    )
     started_at = time.monotonic()
 
     # ----- auth helper -----
@@ -79,8 +84,9 @@ def create_app(dispatcher: Dispatcher, whatsapp_channel: WhatsAppChannel | None 
             raise HTTPException(status_code=403, detail="Bad signature")
         payload = await request.json()
         if whatsapp_channel is not None:
-            # Process asynchronously so we return 200 to Meta immediately.
-            asyncio.create_task(whatsapp_channel.process(payload))
+            # Process asynchronously so we return 200 to the provider immediately.
+            # bg.spawn keeps a task reference and logs failures (not swallowed).
+            bg.spawn(whatsapp_channel.process(payload), name="whatsapp_webhook")
         else:
             logger.warning("WhatsApp webhook hit but channel is disabled.")
         return JSONResponse({"status": "ok"})
@@ -177,6 +183,11 @@ def create_app(dispatcher: Dispatcher, whatsapp_channel: WhatsAppChannel | None 
         action = body.get("action")
         if not entity_id or action not in ("turn_on", "turn_off", "lock", "unlock"):
             raise HTTPException(status_code=400, detail="entity_id and valid action required")
+        # Only allow toggling entities that belong to a registered flat — prevents
+        # controlling arbitrary Home Assistant devices via the admin override.
+        known = {e for u in registry.list_users() for e in u.entities.values()}
+        if entity_id not in known:
+            raise HTTPException(status_code=403, detail="entity_id not registered to any flat")
         fn = getattr(dispatcher.ha, action)
         ok = await fn(entity_id)
         return {"status": "ok" if ok else "failed", "entity_id": entity_id, "action": action}

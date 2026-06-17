@@ -62,3 +62,10 @@ async def test_auto_off_note(ha, user):
 async def test_energy(ha, user):
     reply = await executor.execute(Intent(action="energy"), user, ha)
     assert "kWh" in reply and "₹" in reply
+
+
+async def test_help_lists_user_devices(ha, user):
+    reply = await executor.execute(Intent(action="help"), user, ha)
+    assert "I can control" in reply
+    # the user's actual device types should appear
+    assert "ac" in reply and "lights" in reply

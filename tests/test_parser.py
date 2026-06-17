@@ -70,3 +70,19 @@ def test_energy():
 def test_schedule_cues_defer(text):
     # Time-of-day phrasing must defer to the LLM (so it's scheduled, not run now).
     assert patterns.match(text) is None
+
+
+@pytest.mark.parametrize("text", ["help", "menu", "what can you do", "my devices", "madad"])
+def test_help(text):
+    assert patterns.match(text).action == "help"
+
+
+def test_duration_capped():
+    m = patterns.match("geyser on for 99999 minutes")
+    assert m.action == "turn_on" and m.duration_minutes == 24 * 60
+
+
+def test_scene_phrase_word_boundary():
+    # "goodbye" must NOT trigger the goodnight scene (substring false positive).
+    m = patterns.match("goodbye everyone")
+    assert m is None or m.action != "scene"

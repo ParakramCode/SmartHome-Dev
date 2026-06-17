@@ -20,6 +20,7 @@ ACTIONS = {
     "schedule",
     "query",
     "energy",
+    "help",
     "unclear",
 }
 

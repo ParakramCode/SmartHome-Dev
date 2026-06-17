@@ -56,6 +56,8 @@ async def run() -> None:
             logger.info("Voice-note transcription enabled.")
         logger.info("WhatsApp channel ready.")
 
+    tg_app = None  # set below; referenced by the notifier closures
+
     # --- Cross-channel notifiers (for scheduler + watchdog) ---
     async def notify_user(user: User, text: str) -> None:
         if user.whatsapp_number and wa_channel:
@@ -79,7 +81,6 @@ async def run() -> None:
     watchdog.start()
 
     # --- Telegram channel (dev) ---
-    tg_app = None
     if settings.telegram_enabled:
         from smarthome.channels.telegram import build_app
         tg_app = build_app(dispatcher)
@@ -104,9 +105,13 @@ async def run() -> None:
     finally:
         logger.info("Shutting down…")
         if tg_app:
-            await tg_app.updater.stop()
-            await tg_app.stop()
-            await tg_app.shutdown()
+            try:
+                if tg_app.updater and tg_app.updater.running:
+                    await tg_app.updater.stop()
+                await tg_app.stop()
+                await tg_app.shutdown()
+            except Exception as exc:
+                logger.warning("Telegram shutdown error: %s", exc)
         await watchdog.stop()
         scheduler.shutdown()
         await dispatcher.close()

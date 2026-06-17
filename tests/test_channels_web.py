@@ -62,6 +62,25 @@ async def test_scheduler_bad_time(ha, user):
     assert "couldn't" in reply.lower()
 
 
+async def test_scheduled_temperature_runs_set_temperature(ha, user):
+    # "every day at 6am turn on AC at 24" should store a set_temperature target.
+    sch = CommandScheduler(Dispatcher(ha=ha))
+    await sch.add(
+        Intent(action="schedule", target_action="turn_on", device="ac",
+               temperature=24, scheduled_time="06:00", recurrence="daily"),
+        user,
+    )
+    # fire the stored job and confirm it sets the temperature
+    from smarthome import db
+    import json
+    with db.connect() as conn:
+        row = conn.execute("SELECT id, intent FROM schedules WHERE user_id = ?", (user.id,)).fetchone()
+    target = json.loads(row["intent"])
+    assert target["action"] == "set_temperature"
+    await sch._run_job(row["id"], user.id, target)
+    assert ("set_temperature", "climate.b204_ac", 24) in ha.calls
+
+
 # ---- Web layer ----
 @pytest.fixture
 def client(ha):
@@ -99,8 +118,16 @@ def test_admin_login_and_crud(client):
     assert r.status_code == 200
     flats = [u["flat"] for u in client.get("/api/users").json()]
     assert "C-101" in flats
-    # manual device toggle
+    # manual device toggle (entity belongs to a registered flat -> allowed)
     r = client.post("/api/device", json={"entity_id": "light.c101", "action": "turn_on"})
     assert r.json()["status"] == "ok"
     # remove
     assert client.delete("/api/users/918").status_code == 200
+
+
+def test_device_toggle_rejects_unknown_entity(client):
+    client.post("/admin/login", data={"password": settings.admin_password})
+    client.post("/api/users", json={"flat": "C-1", "whatsapp_number": "917", "entities": {"lights": "light.c1"}})
+    # an entity not registered to any flat must be rejected
+    r = client.post("/api/device", json={"entity_id": "lock.someone_elses_door", "action": "unlock"})
+    assert r.status_code == 403

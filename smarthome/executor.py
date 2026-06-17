@@ -16,11 +16,11 @@ import asyncio
 import logging
 from typing import Awaitable, Callable
 
-from .config import scenes as get_scenes
+from .config import scenes as get_scenes, device_types
 from .intents import Intent
 from .ha_client import HomeAssistantClient
 from .registry import User
-from . import messages, energy
+from . import messages, energy, bg
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,25 @@ async def _auto_off(
         )
         await notify(msg)
     logger.info("Auto-off %s for %s", "done" if ok else "FAILED", entity_id)
+
+
+def _help_text(user: User) -> str:
+    """Personalised help: the user's own devices + example commands."""
+    devices = sorted(user.entities.keys())
+    scene_names = sorted(get_scenes().keys())
+    if devices:
+        device_line = "I can control: " + ", ".join(devices) + "."
+    else:
+        device_line = "Your flat doesn't have any devices set up yet."
+    examples = [
+        "• 'AC on' / 'lights off' / 'lock door'",
+        "• 'set AC to 24' · 'geyser on for 30 minutes'",
+        "• 'is the AC on?' · 'my energy usage'",
+        "• 'every day at 6am turn on geyser' · 'show my schedules'",
+    ]
+    if scene_names:
+        examples.append("• scenes: " + ", ".join(s.replace("_", " ") for s in scene_names))
+    return f"👋 {device_line}\n\nTry:\n" + "\n".join(examples) + "\n\nHindi/Hinglish works too."
 
 
 async def _run_scene(scene_name: str, user: User, ha: HomeAssistantClient) -> tuple[bool, list[str]]:
@@ -107,6 +126,10 @@ async def execute(
     if action == "energy":
         return await energy.report_for(user, ha)
 
+    # --- Help / what can I control ---
+    if action == "help":
+        return _help_text(user)
+
     # --- State query ---
     if action == "query" and intent.device:
         entity = user.resolve(intent.device)
@@ -137,8 +160,9 @@ async def execute(
 
         # Auto-off timer.
         if effective == "turn_on" and intent.duration_minutes:
-            asyncio.create_task(
-                _auto_off(ha, entity, intent.duration_minutes, intent.device, notify)
+            bg.spawn(
+                _auto_off(ha, entity, intent.duration_minutes, intent.device, notify),
+                name=f"auto_off:{entity}",
             )
             reply += messages.AUTO_OFF_NOTE.format(minutes=intent.duration_minutes)
         return reply

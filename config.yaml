@@ -53,3 +53,4 @@ settings:
   max_message_chars: 100         # parse only the first N chars of a message
   conversation_history: 10       # LLM context: last N exchanges per user
   energy_rate_per_unit: 8.0      # ₹ per kWh, used for energy reports
+  timezone: Asia/Kolkata         # used by the scheduler for HH:MM times

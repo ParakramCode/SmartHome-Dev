@@ -118,6 +118,7 @@ class Settings:
     max_message_chars: int
     conversation_history: int
     energy_rate_per_unit: float
+    timezone: str
 
     # --- Derived capability flags ---
     @property
@@ -172,7 +173,7 @@ def _load_settings() -> Settings:
         whapi_api_url=(_env("WHAPI_API_URL", default="https://gate.whapi.cloud") or "").rstrip("/"),
         whapi_webhook_secret=_env("WHAPI_WEBHOOK_SECRET"),
         admin_password=_env("ADMIN_PASSWORD"),
-        session_secret=_env("SESSION_SECRET", default="change-me-in-production"),
+        session_secret=_env("SESSION_SECRET", default=DEFAULT_SESSION_SECRET),
         admin_whatsapp=_env("ADMIN_WHATSAPP"),
         port=int(_env("PORT", default="3000")),
         app_env=_env("APP_ENV", "NODE_ENV", default="development"),
@@ -183,10 +184,31 @@ def _load_settings() -> Settings:
         max_message_chars=int(_yaml_settings.get("max_message_chars", 100)),
         conversation_history=int(_yaml_settings.get("conversation_history", 10)),
         energy_rate_per_unit=float(_yaml_settings.get("energy_rate_per_unit", 8.0)),
+        timezone=str(_yaml_settings.get("timezone", "Asia/Kolkata")),
     )
 
 
+DEFAULT_SESSION_SECRET = "change-me-in-production"
+
+
+def _validate_production(s: Settings) -> None:
+    """In production, refuse to start with insecure/missing security settings."""
+    if s.app_env != "production":
+        return
+    problems = []
+    if s.admin_enabled and s.session_secret == DEFAULT_SESSION_SECRET:
+        problems.append("SESSION_SECRET must be set to a random value (admin panel is enabled)")
+    if s.whatsapp_enabled:
+        if s.whatsapp_provider == "meta" and not s.whatsapp_app_secret:
+            problems.append("WHATSAPP_APP_SECRET is required to verify Meta webhooks")
+        if s.whatsapp_provider == "whapi" and not s.whapi_webhook_secret:
+            problems.append("WHAPI_WEBHOOK_SECRET is required to authenticate Whapi webhooks")
+    if problems:
+        _fail("Insecure production config:\n   - " + "\n   - ".join(problems))
+
+
 settings = _load_settings()
+_validate_production(settings)
 
 
 # ---------------------------------------------------------------------------

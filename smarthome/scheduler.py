@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from typing import Awaitable, Callable
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -25,10 +26,19 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
 from . import db, registry, executor
+from .config import settings
 from .intents import Intent
 from .core import Dispatcher
 
 logger = logging.getLogger(__name__)
+
+
+def _tz() -> ZoneInfo:
+    try:
+        return ZoneInfo(settings.timezone)
+    except Exception:
+        logger.warning("Unknown timezone %r — falling back to UTC.", settings.timezone)
+        return ZoneInfo("UTC")
 
 # notifier(user, text)
 NotifierFn = Callable[[registry.User, str], Awaitable[None]]
@@ -38,7 +48,8 @@ class CommandScheduler:
     def __init__(self, dispatcher: Dispatcher, notifier: NotifierFn | None = None):
         self.d = dispatcher
         self.notifier = notifier
-        self.sched = AsyncIOScheduler()
+        self.tz = _tz()
+        self.sched = AsyncIOScheduler(timezone=self.tz)
 
     # -- lifecycle ------------------------------------------------------------
     def start(self) -> None:
@@ -53,13 +64,19 @@ class CommandScheduler:
     def _load_existing(self) -> None:
         with db.connect() as conn:
             rows = conn.execute("SELECT * FROM schedules WHERE active = 1").fetchall()
+        loaded, stale = 0, []
         for row in rows:
             trigger = self._trigger_from_spec(row["cron"])
             if trigger is None:
+                stale.append(row["id"])  # expired one-off; deactivate
                 continue
             target = Intent(**json.loads(row["intent"]))
             self._register(row["id"], row["user_id"], trigger, target)
-        logger.info("Loaded %d active schedule(s).", len(rows))
+            loaded += 1
+        if stale:
+            with db.connect() as conn:
+                conn.executemany("UPDATE schedules SET active = 0 WHERE id = ?", [(i,) for i in stale])
+        logger.info("Loaded %d active schedule(s); deactivated %d stale.", loaded, len(stale))
 
     # -- the dispatcher hook --------------------------------------------------
     async def add(self, intent: Intent, user: registry.User) -> str:
@@ -78,6 +95,10 @@ class CommandScheduler:
         trigger, spec = self._build_trigger(intent.scheduled_time, intent.recurrence)
         if trigger is None:
             return "I couldn't understand the time. Try 'every day at 6am turn on geyser'."
+
+        # A scheduled turn_on that carries a temperature is a set_temperature.
+        if action == "turn_on" and intent.temperature and intent.device == "ac":
+            action = "set_temperature"
 
         target = Intent(action=action, device=intent.device, temperature=intent.temperature, source="schedule")
         sid = self._persist(user.id, spec, intent.reply or "", target)
@@ -98,10 +119,10 @@ class CommandScheduler:
             return None, None
 
         if recurrence == "daily":
-            return CronTrigger(hour=hour, minute=minute), f"cron:{hour}:{minute}"
+            return CronTrigger(hour=hour, minute=minute, timezone=self.tz), f"cron:{hour}:{minute}"
 
-        # One-off: next occurrence today, else tomorrow.
-        now = datetime.now()
+        # One-off: next occurrence today, else tomorrow (in the configured tz).
+        now = datetime.now(self.tz)
         run_at = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if run_at <= now:
             run_at += timedelta(days=1)
@@ -112,10 +133,10 @@ class CommandScheduler:
             kind, rest = spec.split(":", 1)
             if kind == "cron":
                 hour, minute = (int(x) for x in rest.split(":"))
-                return CronTrigger(hour=hour, minute=minute)
+                return CronTrigger(hour=hour, minute=minute, timezone=self.tz)
             if kind == "date":
                 run_at = datetime.fromisoformat(rest)
-                if run_at <= datetime.now():
+                if run_at <= datetime.now(self.tz):
                     return None  # stale one-off; skip
                 return DateTrigger(run_date=run_at)
         except Exception as exc:
