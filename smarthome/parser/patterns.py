@@ -54,6 +54,8 @@ SCENE_PHRASES = {
 _WORD = re.compile(r"[a-z0-9']+")
 _DURATION_RE = re.compile(r"(\d+)\s*(?:m|min|mins|minit|minute|minutes)\b")
 _TEMP_RE = re.compile(r"(\d{2})\s*(?:degree|degrees|deg|°|c\b)")
+# Bare 2-digit number (used for AC temperature like "set ac to 24" / "ac 24").
+_BARE_TEMP_RE = re.compile(r"\b(\d{2})\b")
 
 
 def _normalize(text: str) -> str:
@@ -169,9 +171,13 @@ def match(text: str) -> Intent | None:
             return Intent(action="lock", device=device, confidence="high", source="pattern")
         return None  # ambiguous "door" with no verb -> let LLM decide
 
-    # 2c) AC temperature ("ac 24 degree", "set ac to 22").
+    # 2c) AC temperature ("ac 24 degree", "set ac to 24", "ac 24").
     if device == "ac":
         temp_match = _TEMP_RE.search(norm)
+        # Bare number (no unit) counts as a temperature only when there's no
+        # on/off verb and no duration — so "ac on for 30 minutes" isn't misread.
+        if not temp_match and duration is None and not _any(norm, ON_WORDS) and not _any(norm, OFF_WORDS):
+            temp_match = _BARE_TEMP_RE.search(norm)
         if temp_match:
             temp = int(temp_match.group(1))
             if 16 <= temp <= 32:

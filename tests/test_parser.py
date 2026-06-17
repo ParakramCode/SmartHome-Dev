@@ -38,6 +38,22 @@ def test_temperature():
     assert m.action == "set_temperature" and m.temperature == 24
 
 
+@pytest.mark.parametrize("text,temp", [
+    ("set ac to 24", 24),
+    ("ac 22", 22),
+    ("set the ac to 18", 18),
+])
+def test_temperature_bare_number(text, temp):
+    m = patterns.match(text)
+    assert m.action == "set_temperature" and m.temperature == temp
+
+
+def test_ac_on_with_duration_not_temperature():
+    # "30" here is a duration, not a temperature.
+    m = patterns.match("ac on for 30 minutes")
+    assert m.action == "turn_on" and m.duration_minutes == 30 and m.temperature is None
+
+
 def test_duration():
     m = patterns.match("geyser on for 30 minutes")
     assert m.action == "turn_on" and m.device == "geyser" and m.duration_minutes == 30

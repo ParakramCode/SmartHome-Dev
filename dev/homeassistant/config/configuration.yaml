@@ -10,6 +10,10 @@
 #   ac     -> climate.flat_b204_ac
 #   lock   -> lock.flat_b204_door
 
+# Force metric so temperatures are in °C (matches the bot's assumptions).
+homeassistant:
+  unit_system: metric
+
 default_config:
 
 # Toggle helpers behaving as lights / geyser / plug (domain: input_boolean,
@@ -35,13 +39,26 @@ input_number:
     step: 1
     unit_of_measurement: "°C"
 
-# A real sensor entity the thermostat can read.
+# A real sensor entity the thermostat reads, plus a real lock entity — both
+# defined under the modern `template:` integration key.
 template:
   - sensor:
       - name: Flat B204 AC temp sensor
         unique_id: flat_b204_ac_temp_sensor
         unit_of_measurement: "°C"
         state: "{{ states('input_number.flat_b204_ac_temp') }}"
+  - lock:
+      name: Flat B204 Door
+      unique_id: flat_b204_door
+      state: "{{ 'locked' if is_state('input_boolean.flat_b204_lock_state', 'on') else 'unlocked' }}"
+      lock:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.flat_b204_lock_state
+      unlock:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.flat_b204_lock_state
 
 # A real climate entity — supports set_temperature and turn_on/turn_off.
 climate:
@@ -50,18 +67,5 @@ climate:
     unique_id: flat_b204_ac
     heater: input_boolean.flat_b204_ac_switch
     target_sensor: sensor.flat_b204_ac_temp_sensor
-
-# A real lock entity backed by a helper — supports lock / unlock.
-lock:
-  - platform: template
-    name: Flat B204 Door
-    unique_id: flat_b204_door
-    value_template: "{{ is_state('input_boolean.flat_b204_lock_state', 'on') }}"
-    lock:
-      - service: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.flat_b204_lock_state
-    unlock:
-      - service: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.flat_b204_lock_state
+    min_temp: 16
+    max_temp: 32
