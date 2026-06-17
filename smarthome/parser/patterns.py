@@ -15,30 +15,41 @@ from ..config import scenes as get_scenes, device_types
 from ..intents import Intent
 
 # Canonical device type -> recognised synonyms (matched as whole words).
+# Includes English, romanized Hinglish, and proper Hindi (Devanagari).
 DEVICE_SYNONYMS = {
-    "ac": ["ac", "a.c", "air con", "aircon", "air conditioner", "cooler"],
-    "lights": ["light", "lights", "lamp", "bulb", "batti", "laitu"],
-    "lock": ["door", "lock", "gate", "darwaza", "darwazaa", "darwaaza"],
-    "geyser": ["geyser", "geezer", "water heater", "heater", "boiler"],
-    "plug": ["plug", "socket", "switch"],
+    "ac": ["ac", "a.c", "air con", "aircon", "air conditioner", "cooler",
+           "एसी", "ए.सी", "एयर कंडीशनर", "कूलर"],
+    "lights": ["light", "lights", "lamp", "bulb", "batti", "laitu",
+               "लाइट", "लाइट्स", "बत्ती", "बल्ब", "लैंप", "रोशनी"],
+    "lock": ["door", "lock", "gate", "darwaza", "darwazaa", "darwaaza",
+             "दरवाजा", "दरवाज़ा", "ताला", "गेट", "लॉक"],
+    "geyser": ["geyser", "geezer", "water heater", "heater", "boiler",
+               "गीजर", "गीज़र", "हीटर", "वॉटर हीटर", "बॉयलर"],
+    "plug": ["plug", "socket", "switch", "प्लग", "सॉकेट", "स्विच"],
 }
 
-ON_WORDS = ["on", "chalu", "chaalu", "start", "jala", "jalao", "chala", "chalao", "lagao"]
-OFF_WORDS = ["off", "band", "bandh", "close", "bujha", "bujhao", "rok", "khatam"]
-UNLOCK_WORDS = ["unlock", "open", "khol", "kholo", "kholdo"]
-LOCK_WORDS = ["lock", "band", "lagao", "tala"]
+ON_WORDS = ["on", "chalu", "chaalu", "start", "jala", "jalao", "chala", "chalao", "lagao",
+            "ऑन", "चालू", "चलाओ", "चला", "जला", "जलाओ", "शुरू", "ऑन करो"]
+OFF_WORDS = ["off", "band", "bandh", "close", "bujha", "bujhao", "rok", "khatam",
+             "ऑफ", "बंद", "बुझा", "बुझाओ", "रोको", "खत्म", "ऑफ करो"]
+UNLOCK_WORDS = ["unlock", "open", "khol", "kholo", "kholdo",
+                "अनलॉक", "खोलो", "खोल", "खोल दो"]
+LOCK_WORDS = ["lock", "band", "lagao", "tala", "लॉक", "बंद", "ताला", "ताला लगाओ"]
 
-QUERY_PREFIXES = ("is ", "are ", "kya ", "what ", "whats ", "what's ")
-QUERY_WORDS = ["status", "on hai", "chal raha", "chalu hai", "band hai", "kitna"]
+QUERY_PREFIXES = ("is ", "are ", "kya ", "what ", "whats ", "what's ", "क्या ")
+QUERY_WORDS = ["status", "on hai", "chal raha", "chalu hai", "band hai", "kitna",
+               "स्थिति", "स्टेटस", "चालू है", "बंद है", "चल रहा", "ऑन है", "कितना"]
 
 # Words implying a future/recurring time -> the message is a schedule, not an
 # immediate command. Defer these to the LLM.
-SCHEDULE_CUES = ("tomorrow", "tonight", "everyday", "every day", "daily", "roz", "subah", "shaam", "kal")
+SCHEDULE_CUES = ("tomorrow", "tonight", "everyday", "every day", "daily", "roz", "subah", "shaam", "kal",
+                 "कल", "रोज", "रोज़", "सुबह", "शाम", "हर रोज", "हर रोज़", "आज रात", "हर दिन")
 
 # Help / capability discovery.
 HELP_PHRASES = (
     "help", "menu", "madad", "what can you do", "what can i", "how to use",
     "commands", "kya kar sakte", "kaise use", "what devices", "my devices",
+    "मदद", "हेल्प", "मेन्यू", "क्या कर सकते", "कैसे इस्तेमाल", "मेरे डिवाइस",
 )
 
 # Cap auto-off duration to a sane maximum (24h) to avoid runaway timers.
@@ -46,20 +57,27 @@ MAX_DURATION_MINUTES = 24 * 60
 
 # Scene trigger phrases (in addition to the scene name itself).
 SCENE_PHRASES = {
-    "goodnight": ["goodnight", "good night", "so raha", "sone ja", "sleeping", "shubh ratri"],
-    "leaving_home": ["leaving", "going out", "ja raha", "bahar ja", "i'm out", "im out", "nikal raha"],
-    "i_am_home": ["i'm home", "im home", "i am home", "ghar aa", "aa gaya", "back home", "ghar pe"],
+    "goodnight": ["goodnight", "good night", "so raha", "sone ja", "sleeping", "shubh ratri",
+                  "शुभ रात्रि", "गुड नाइट", "सो रहा", "सोने जा", "सोने जा रहा"],
+    "leaving_home": ["leaving", "going out", "ja raha", "bahar ja", "i'm out", "im out", "nikal raha",
+                     "जा रहा", "बाहर जा", "निकल रहा", "बाहर जा रहा"],
+    "i_am_home": ["i'm home", "im home", "i am home", "ghar aa", "aa gaya", "back home", "ghar pe",
+                  "घर आ", "आ गया", "घर आ गया", "घर पहुंच", "घर पहुँच"],
 }
 
 _WORD = re.compile(r"[a-z0-9']+")
-_DURATION_RE = re.compile(r"(\d+)\s*(?:m|min|mins|minit|minute|minutes)\b")
-_TEMP_RE = re.compile(r"(\d{2})\s*(?:degree|degrees|deg|°|c\b)")
+_DURATION_RE = re.compile(r"(\d+)\s*(?:m|min|mins|minit|minute|minutes|मिनट)\b")
+_TEMP_RE = re.compile(r"(\d{2})\s*(?:degree|degrees|deg|°|c\b|डिग्री)")
 # Bare 2-digit number (used for AC temperature like "set ac to 24" / "ac 24").
 _BARE_TEMP_RE = re.compile(r"\b(\d{2})\b")
+
+# Map Devanagari numerals (०-९) to ASCII so digit regexes work on Hindi text.
+_DEVANAGARI_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
 
 
 def _normalize(text: str) -> str:
     text = text.lower().strip()
+    text = text.translate(_DEVANAGARI_DIGITS)
     text = text.replace("°", " degree ")
     text = re.sub(r"\s+", " ", text)
     return text
@@ -118,7 +136,8 @@ def match(text: str) -> Intent | None:
         return Intent(action="help", confidence="high", source="pattern")
 
     # 0) Energy / usage / bill enquiry.
-    if any(w in norm for w in ("energy", "usage", "electricity", "bijli", "bill", "consumption", "units")):
+    if any(w in norm for w in ("energy", "usage", "electricity", "bijli", "bill", "consumption", "units",
+                               "बिजली", "ऊर्जा", "बिल", "खपत", "यूनिट")):
         return Intent(action="energy", confidence="high", source="pattern")
 
     # 0b) Listing / cancelling schedules (creating one needs a time -> LLM).
@@ -137,7 +156,7 @@ def match(text: str) -> Intent | None:
         any(c in norm for c in SCHEDULE_CUES)
         or re.search(r"\b\d{1,2}\s*(?:am|pm)\b", norm)
         or re.search(r"\bat\s+\d{1,2}\b", norm)
-        or "baje" in norm or "bje" in norm
+        or "baje" in norm or "bje" in norm or "बजे" in norm
     ):
         return None
 
