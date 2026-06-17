@@ -76,7 +76,11 @@ class WhatsAppChannel:
             async def notify(body: str, _to=sender) -> None:
                 await self.client.send_text(_to, body)
 
-            reply = await self.dispatcher.handle(
-                channel="whatsapp", message=text or "", whatsapp_number=sender, notify=notify,
-            )
-            await self.client.send_text(sender, reply)
+            try:
+                reply = await self.dispatcher.handle(
+                    channel="whatsapp", message=text or "", whatsapp_number=sender, notify=notify,
+                )
+            except Exception:
+                logger.exception("Dispatcher error handling WhatsApp message")
+                reply = "Something went wrong. Please try again in a moment."
+            await self.client.send_text(sender, reply or "Something went wrong. Please try again.")

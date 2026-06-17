@@ -61,9 +61,18 @@ CREATE TABLE IF NOT EXISTS schedules (
     active        INTEGER NOT NULL DEFAULT 1
 );
 
+CREATE TABLE IF NOT EXISTS messages (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,        -- FK -> users.id
+    role        TEXT NOT NULL,           -- user | assistant
+    content     TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_commands_user      ON commands(user_id);
 CREATE INDEX IF NOT EXISTS idx_commands_timestamp ON commands(timestamp);
 CREATE INDEX IF NOT EXISTS idx_schedules_user     ON schedules(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_user      ON messages(user_id);
 """
 
 

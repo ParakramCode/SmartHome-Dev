@@ -20,7 +20,7 @@ from typing import Awaitable, Callable
 from .config import settings
 from .ha_client import HomeAssistantClient
 from .ratelimit import RateLimiter
-from . import registry, parser, executor, command_log, messages
+from . import registry, parser, executor, command_log, messages, memory
 from .intents import Intent
 from .registry import User
 
@@ -40,19 +40,27 @@ class Dispatcher:
         # Optional hook set by the scheduler module (task: scheduling).
         self.schedule_handler = None
 
-    # -- conversation history -------------------------------------------------
+    # -- conversation history (persistent, SQLite-backed) ---------------------
     def _history_for(self, user_id: int) -> list[dict]:
-        return self._history.setdefault(user_id, [])
+        # Lazily load a user's stored history into the in-memory cache so it
+        # survives restarts (the bot "remembers" past exchanges).
+        if user_id not in self._history:
+            self._history[user_id] = memory.load_recent(user_id, settings.conversation_history * 2)
+        return self._history[user_id]
 
     def _remember(self, user_id: int, role: str, content: str) -> None:
+        limit = settings.conversation_history * 2
         hist = self._history_for(user_id)
         hist.append({"role": role, "content": content})
-        limit = settings.conversation_history * 2
         if len(hist) > limit:
             self._history[user_id] = hist[-limit:]
+        # Persist + trim so memory outlives restarts.
+        memory.add_message(user_id, role, content)
+        memory.trim(user_id, limit)
 
     def clear_history(self, user_id: int) -> None:
         self._history.pop(user_id, None)
+        memory.clear(user_id)
 
     # -- main entry point -----------------------------------------------------
     async def handle(

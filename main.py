@@ -80,20 +80,40 @@ async def run() -> None:
     watchdog = Watchdog(dispatcher.ha, notify_admin=notify_admin)
     watchdog.start()
 
-    # --- Telegram channel (dev) ---
-    if settings.telegram_enabled:
-        from smarthome.channels.telegram import build_app
-        tg_app = build_app(dispatcher)
-        await tg_app.initialize()
-        await tg_app.start()
-        await tg_app.updater.start_polling(drop_pending_updates=True, allowed_updates=["message"])
-        logger.info("Telegram polling started.")
-
-    # --- Web server (webhook + admin) ---
+    # --- Web server (webhook + admin) — start it CONCURRENTLY so it's always
+    #     reachable even if a channel's startup is slow. ---
     app = create_app(dispatcher, whatsapp_channel=wa_channel)
     server = uvicorn.Server(
         uvicorn.Config(app, host="0.0.0.0", port=settings.port, log_level="info")
     )
+    server_task = asyncio.create_task(server.serve())
+
+    # --- Telegram channel (dev), guarded with timeouts so a slow/flaky init
+    #     can never block the rest of the app. ---
+    if settings.telegram_enabled:
+        try:
+            import importlib
+            # Import off-thread: the python-telegram-bot import is heavy and disk
+            # reads can be slow (e.g. iCloud-synced dirs), which would otherwise
+            # freeze the event loop and the web server.
+            logger.info("Telegram: importing module…")
+            tg_module = await asyncio.wait_for(
+                asyncio.to_thread(importlib.import_module, "smarthome.channels.telegram"),
+                timeout=60,
+            )
+            logger.info("Telegram: building application…")
+            tg_app = tg_module.build_app(dispatcher)
+            logger.info("Telegram: initializing…")
+            await asyncio.wait_for(tg_app.initialize(), timeout=30)
+            await tg_app.start()
+            await asyncio.wait_for(
+                tg_app.updater.start_polling(drop_pending_updates=True, allowed_updates=["message"]),
+                timeout=30,
+            )
+            logger.info("Telegram polling started.")
+        except Exception:
+            logger.exception("Telegram startup failed — running without Telegram.")
+            tg_app = None
 
     print("\n  ✅  SmartHome is live.")
     print(f"      Webhook + admin : http://localhost:{settings.port}/admin")
@@ -101,7 +121,7 @@ async def run() -> None:
     print("      Press Ctrl+C to stop.\n")
 
     try:
-        await server.serve()  # blocks until shutdown signal
+        await server_task  # blocks until shutdown signal
     finally:
         logger.info("Shutting down…")
         if tg_app:

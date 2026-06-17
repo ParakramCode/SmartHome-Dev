@@ -47,3 +47,20 @@ async def test_empty_message(ha, user):
     d = Dispatcher(ha=ha)
     reply = await d.handle(channel="telegram", message="   ", telegram_id=user.telegram_id)
     assert reply == messages.UNKNOWN
+
+
+async def test_memory_persists_across_restart(ha, user):
+    # A fresh Dispatcher (simulating a restart) should recall prior exchanges.
+    d1 = Dispatcher(ha=ha)
+    await d1.handle(channel="telegram", message="lights on", telegram_id=user.telegram_id)
+    d2 = Dispatcher(ha=ha)
+    contents = [m["content"] for m in d2._history_for(user.id)]
+    assert "lights on" in contents
+
+
+async def test_clear_history_wipes_memory(ha, user):
+    d = Dispatcher(ha=ha)
+    await d.handle(channel="telegram", message="lights on", telegram_id=user.telegram_id)
+    d.clear_history(user.id)
+    d2 = Dispatcher(ha=ha)
+    assert d2._history_for(user.id) == []

@@ -5,7 +5,7 @@ plain language — English, Hindi, or Hinglish. Messages are interpreted by a
 **hybrid parser** (instant pattern matching, with a Gemini LLM fallback for
 anything ambiguous) and executed against **Home Assistant**. Multi-flat, with a
 SQLite user registry, command logging, an admin panel, scheduling, voice notes,
-energy reporting, and a reliability watchdog.
+energy reporting, **persistent conversation memory**, and a reliability watchdog.
 
 ```
 Resident message (WhatsApp / Telegram)
@@ -25,6 +25,8 @@ Channel adapter  --->  Dispatcher  --->  Hybrid parser -(pattern | LLM)->  Inten
 | `smarthome/parser/` | `patterns.py` (fast) + `llm.py` (Gemini) behind `parse()` |
 | `smarthome/executor.py` | Intent -> Home Assistant actions (per-flat) |
 | `smarthome/core.py` | `Dispatcher`: auth -> rate-limit -> parse -> execute -> log |
+| `smarthome/memory.py` | Persistent per-user conversation history (survives restarts) |
+| `smarthome/bg.py` | Safe fire-and-forget background tasks (auto-off, webhook) |
 | `smarthome/channels/` | `telegram.py` (dev); `whatsapp.py` facade over `whatsapp_meta.py` (Meta) / `whapi.py` (Whapi.Cloud) |
 | `smarthome/web/` | FastAPI: WhatsApp webhook, `/health`, admin panel |
 | `smarthome/scheduler.py` | Recurring/one-off commands (APScheduler) |
@@ -102,6 +104,22 @@ Home Assistant status, and manually toggle devices.
 - Voice notes (WhatsApp, if Whisper installed)
 
 Scheduled times use the `timezone` in `config.yaml` (default `Asia/Kolkata`).
+
+### Conversation memory
+
+The bot remembers each user's recent exchanges (persisted in SQLite), so
+multi-turn, context-aware commands work and survive restarts — e.g. "turn on the
+AC" then "make it warmer", or "is the geyser on?" then "turn it off". History
+length is set by `conversation_history` in `config.yaml`. On Telegram, send
+`/clear` to wipe your own history.
+
+### Trying it locally
+
+Spin up a throwaway Home Assistant with fake devices and point the bot at it —
+see [`dev/homeassistant/README.md`](dev/homeassistant/README.md). For a quick
+real chat test, set `TELEGRAM_BOT_TOKEN` (from @BotFather), run `python main.py`,
+send `/start` to your bot to get your Telegram ID, register it in the admin
+panel, then text commands.
 
 ## Testing
 

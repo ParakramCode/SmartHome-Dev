@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from smarthome import db, registry
+from smarthome.config import settings
 
 
 @pytest.fixture(autouse=True)
@@ -17,6 +18,12 @@ def temp_db(monkeypatch):
     yield
     for p in tmp.parent.glob("test.db*"):
         p.unlink(missing_ok=True)
+
+
+@pytest.fixture(autouse=True)
+def _hermetic(monkeypatch):
+    """Keep tests offline: never call the real LLM, even if a key is in .env."""
+    monkeypatch.setattr(settings, "gemini_api_key", None)
 
 
 class StubHA:

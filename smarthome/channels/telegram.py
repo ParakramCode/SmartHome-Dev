@@ -21,7 +21,7 @@ from telegram.ext import (
 
 from ..config import settings
 from ..core import Dispatcher
-from .. import registry
+from .. import registry, messages
 
 logger = logging.getLogger(__name__)
 
@@ -65,10 +65,15 @@ def build_app(dispatcher: Dispatcher) -> Application:
         async def notify(msg: str) -> None:
             await context.bot.send_message(chat_id=chat_id, text=msg)
 
-        reply = await dispatcher.handle(
-            channel="telegram", message=text, telegram_id=tid, notify=notify,
-        )
-        await update.message.reply_text(reply)
+        try:
+            reply = await dispatcher.handle(
+                channel="telegram", message=text, telegram_id=tid, notify=notify,
+            )
+        except Exception:
+            logger.exception("Dispatcher error handling Telegram message")
+            reply = messages.ERROR
+        # Never send an empty message (Telegram rejects it -> silent no-reply).
+        await update.message.reply_text(reply or messages.ERROR)
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("clear", cmd_clear))
