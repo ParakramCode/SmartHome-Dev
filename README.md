@@ -3,9 +3,11 @@
 Residents control their home (AC, lights, locks, geyser, plugs) by messaging in
 plain language — English, Hindi, or Hinglish. Messages are interpreted by a
 **hybrid parser** (instant pattern matching, with a Gemini LLM fallback for
-anything ambiguous) and executed against **Home Assistant**. Multi-flat, with a
-SQLite user registry, command logging, an admin panel, scheduling, voice notes,
-energy reporting, **persistent conversation memory**, and a reliability watchdog.
+anything ambiguous) and executed against **Home Assistant**. The bot **replies in
+the same language you wrote in** (English → English, romanized → Hinglish,
+Devanagari → Hindi). Multi-flat, with a SQLite user registry, command logging,
+an admin panel, scheduling, voice notes, energy reporting, **persistent
+per-instance conversation memory**, and a reliability watchdog.
 
 ```
 Resident message (WhatsApp / Telegram)
@@ -25,7 +27,8 @@ Channel adapter  --->  Dispatcher  --->  Hybrid parser -(pattern | LLM)->  Inten
 | `smarthome/parser/` | `patterns.py` (fast) + `llm.py` (Gemini) behind `parse()` |
 | `smarthome/executor.py` | Intent -> Home Assistant actions (per-flat) |
 | `smarthome/core.py` | `Dispatcher`: auth -> rate-limit -> parse -> execute -> log |
-| `smarthome/memory.py` | Persistent per-user conversation history (survives restarts) |
+| `smarthome/memory.py` | Persistent per-(user, channel) conversation history (survives restarts) |
+| `smarthome/lang.py` | Language detection + localized replies (en / hinglish / hi) |
 | `smarthome/bg.py` | Safe fire-and-forget background tasks (auto-off, webhook) |
 | `smarthome/channels/` | `telegram.py` (dev); `whatsapp.py` facade over `whatsapp_meta.py` (Meta) / `whapi.py` (Whapi.Cloud) |
 | `smarthome/web/` | FastAPI: WhatsApp webhook, `/health`, admin panel |
@@ -105,13 +108,23 @@ Home Assistant status, and manually toggle devices.
 
 Scheduled times use the `timezone` in `config.yaml` (default `Asia/Kolkata`).
 
+### Language
+
+The bot answers in the **same language as your current message** — English →
+English, romanized Hindi → Hinglish, Devanagari → Hindi. This applies to both
+the fast pattern path (localized confirmations/errors) and the LLM path (steered
+by a strict per-message instruction). It keys off *your latest message*, not
+earlier ones, so switching languages mid-chat works.
+
 ### Conversation memory
 
-The bot remembers each user's recent exchanges (persisted in SQLite), so
-multi-turn, context-aware commands work and survive restarts — e.g. "turn on the
-AC" then "make it warmer", or "is the geyser on?" then "turn it off". History
-length is set by `conversation_history` in `config.yaml`. On Telegram, send
-`/clear` to wipe your own history.
+The bot remembers recent exchanges (persisted in SQLite), so multi-turn,
+context-aware commands work and survive restarts — e.g. "turn on the AC" then
+"make it warmer", or "is the geyser on?" then "turn it off". Memory is **per
+(user, channel)** — a flat's Telegram and WhatsApp chats are kept separate, so
+instances never bleed into each other. History length is set by
+`conversation_history` in `config.yaml`. On Telegram, send `/clear` to wipe that
+instance's history.
 
 ### Trying it locally
 
