@@ -122,6 +122,30 @@ async def execute(
             return await on_schedule(intent, user)
         return intent.reply or "Scheduling isn't available right now."
 
+    # --- Humidifier: set humidity % ---
+    if action == "set_humidity" and intent.device:
+        entity = user.resolve(intent.device)
+        if not entity:
+            return lang.system("no_such_device", intent.lang, device=intent.device)
+        ok = await ha.set_humidity(entity, intent.humidity)
+        if ok:
+            await ha.turn_on(entity)  # ensure it's running
+        if not ok:
+            return lang.system("ha_down", intent.lang)
+        return intent.reply or f"Humidity set to {intent.humidity}% ✓"
+
+    # --- Humidifier: set mist/preset mode ---
+    if action == "set_mode" and intent.device:
+        entity = user.resolve(intent.device)
+        if not entity:
+            return lang.system("no_such_device", intent.lang, device=intent.device)
+        ok = await ha.set_mode(entity, intent.mode)
+        if ok:
+            await ha.turn_on(entity)
+        if not ok:
+            return lang.system("ha_down", intent.lang)
+        return intent.reply or f"Mode set to {intent.mode} ✓"
+
     # --- Energy report ---
     if action == "energy":
         return await energy.report_for(user, ha)

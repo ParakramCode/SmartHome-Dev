@@ -29,6 +29,9 @@ device_types:
   plug:
     domain: switch
     actions: [turn_on, turn_off]
+  humidifier:
+    domain: humidifier
+    actions: [turn_on, turn_off]
 
 # Scenes: one phrase -> several actions. Written in canonical device types;
 # resolved to a specific flat's entities at execution time.

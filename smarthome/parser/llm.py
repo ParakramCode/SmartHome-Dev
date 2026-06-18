@@ -64,12 +64,14 @@ Return ONLY valid JSON. No preamble, no markdown, no code fences. Just raw JSON.
 
 Schema:
 {{
-  "action": "turn_on|turn_off|lock|unlock|set_temperature|scene|schedule|query|energy|help|unclear",
+  "action": "turn_on|turn_off|lock|unlock|set_temperature|set_humidity|set_mode|scene|schedule|query|energy|help|unclear",
   "device": "<device key from the list above, or null>",
   "scene": "<scene name from the list above, or null>",
   "scheduled_time": "<HH:MM in 24hr format, or null>",
   "duration_minutes": "<integer number of minutes, or null>",
   "temperature": "<integer degrees, or null>",
+  "humidity": "<integer 0-100 percent, for the humidifier, or null>",
+  "mode": "<preset/mist mode string for the humidifier, e.g. high/low/auto/sleep, or null>",
   "target_action": "<for schedule only: turn_on|turn_off|lock|unlock, or null>",
   "recurrence": "<for schedule only: daily|once, or null>",
   "confidence": "high|medium|low",
@@ -88,6 +90,10 @@ Schema:
 7. Device not in the list -> action "unclear", explain you don't have that device.
 8. Unsure what the user wants -> action "unclear", confidence "low", ask for clarification.
 9. Setting a temperature -> action "set_temperature", device "ac", temperature <int>.
+9b. Setting humidity ("humidity to 60", "set humidifier to 50%") -> action
+    "set_humidity", device "humidifier", humidity <int 0-100>.
+9c. Setting the humidifier's mist/preset mode ("mist high", "sleep mode") ->
+    action "set_mode", device "humidifier", mode "<the mode word>".
 10. Asking about energy/electricity usage or bill -> action "energy".
 10b. Asking for help, a menu, or what they can control -> action "help".
 11. LANGUAGE: reply in the SAME language as the user's CURRENT message ONLY.
@@ -96,6 +102,12 @@ Schema:
     for an English message, and do NOT switch languages based on earlier messages.
 12. Keep replies short, friendly, conversational — like a helpful housemate.
 13. For locks use action "lock"/"unlock", not "turn_on"/"turn_off".
+14. PRONOUNS / context: if the user refers to a device implicitly ("it", "that",
+    "ise", "usse", "wahi") without naming one, infer it from recent messages —
+    pick the most recently mentioned device that the requested action sensibly
+    applies to. E.g. "turn it off" -> the most recent device that is ON (a lock
+    can't be turned off, so skip it and use the light/AC/etc.). Only use action
+    "unclear" to ask for clarification if there is genuinely no sensible device.
 """
 
 
@@ -103,8 +115,6 @@ async def parse(user_message: str, conversation_history: list[dict]) -> Intent |
     """Parse a message via Gemini. Returns None if the LLM is disabled."""
     if not settings.llm_enabled:
         return None
-
-    from google.genai import types
 
     # Steer the reply language to the user's current message (strongest signal).
     lang_code = lang_mod.detect(user_message)
@@ -114,29 +124,33 @@ async def parse(user_message: str, conversation_history: list[dict]) -> Intent |
         f"Write the 'reply' field ONLY in {lang_mod.LABELS[lang_code]}, "
         f"matching its script. Ignore the language of any earlier messages."
     )
+    history = list(conversation_history)
+    logger.info("LLM parse -> model=%s msg='%s' history=%d", MODEL, user_message[:80], len(history))
 
-    contents = []
-    for msg in conversation_history:
-        role = "model" if msg.get("role") == "assistant" else "user"
-        contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg["content"])]))
-    contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_message)]))
-
-    logger.info("LLM parse -> model=%s msg='%s' history=%d", MODEL, user_message[:80], len(conversation_history))
+    def _call():
+        # ALL google-genai work runs off the event loop. The `google.genai`
+        # import and client can be slow on iCloud-synced disks; doing it on the
+        # loop would freeze the whole app (web + every other message).
+        from google.genai import types
+        contents = []
+        for msg in history:
+            role = "model" if msg.get("role") == "assistant" else "user"
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg["content"])]))
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_message)]))
+        return _get_client().models.generate_content(
+            model=MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                max_output_tokens=MAX_TOKENS,
+                temperature=0.2,
+            ),
+        )
 
     raw_text = ""
     try:
-        def _call():
-            return _get_client().models.generate_content(
-                model=MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    max_output_tokens=MAX_TOKENS,
-                    temperature=0.2,
-                ),
-            )
-
-        response = await asyncio.to_thread(_call)
+        # Hard timeout so a slow/hung LLM call can never wedge a reply.
+        response = await asyncio.wait_for(asyncio.to_thread(_call), timeout=25)
         raw_text = (response.text or "").strip()
         logger.info("LLM raw: %s", raw_text[:300])
 
@@ -151,6 +165,9 @@ async def parse(user_message: str, conversation_history: list[dict]) -> Intent |
             return fallback()
         return from_llm_dict(data)
 
+    except asyncio.TimeoutError:
+        logger.error("LLM call timed out after 25s")
+        return fallback()
     except json.JSONDecodeError as exc:
         logger.error("LLM JSON parse failed: %s — raw: %s", exc, raw_text)
         return fallback()

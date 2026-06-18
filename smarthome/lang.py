@@ -52,6 +52,7 @@ _DEVICE = {
     "geyser": {"hinglish": "Geyser", "hi": "गीज़र"},
     "plug": {"hinglish": "Plug", "hi": "प्लग"},
     "lock": {"hinglish": "Darwaza", "hi": "दरवाज़ा"},
+    "humidifier": {"hinglish": "Humidifier", "hi": "ह्यूमिडिफायर"},
 }
 _ACTION = {
     "turn_on": {"hinglish": "chalu kar diya", "hi": "चालू कर दिया"},

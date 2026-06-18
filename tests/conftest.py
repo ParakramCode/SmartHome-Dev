@@ -22,8 +22,10 @@ def temp_db(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _hermetic(monkeypatch):
-    """Keep tests offline: never call the real LLM, even if a key is in .env."""
+    """Isolate tests from the local .env: no real LLM, and a stable WhatsApp
+    provider default (tests that need whapi override this themselves)."""
     monkeypatch.setattr(settings, "gemini_api_key", None)
+    monkeypatch.setattr(settings, "whatsapp_provider", "meta")
 
 
 class StubHA:

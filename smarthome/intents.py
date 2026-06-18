@@ -16,6 +16,8 @@ ACTIONS = {
     "lock",
     "unlock",
     "set_temperature",
+    "set_humidity",
+    "set_mode",
     "scene",
     "schedule",
     "query",
@@ -33,6 +35,8 @@ class Intent:
     scheduled_time: str | None = None    # "HH:MM" 24h
     duration_minutes: int | None = None  # auto-off after N minutes
     temperature: int | None = None       # target degrees (climate)
+    humidity: int | None = None          # target % (humidifier)
+    mode: str | None = None              # preset/mist mode (humidifier)
     target_action: str | None = None     # for action=schedule: what to run at the time
     recurrence: str | None = None        # for action=schedule: "daily" | "once"
     confidence: str = "high"             # high | medium | low
@@ -68,6 +72,8 @@ def from_llm_dict(data: dict) -> Intent:
         scheduled_time=data.get("scheduled_time"),
         duration_minutes=_int(data.get("duration_minutes")),
         temperature=_int(data.get("temperature")),
+        humidity=_int(data.get("humidity")),
+        mode=data.get("mode"),
         target_action=data.get("target_action"),
         recurrence=data.get("recurrence"),
         confidence=data.get("confidence", "medium"),

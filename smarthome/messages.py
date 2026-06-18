@@ -20,6 +20,8 @@ CONFIRM = {
     ("geyser", "turn_off"): "Geyser off ✓",
     ("plug", "turn_on"): "Plug on ✓",
     ("plug", "turn_off"): "Plug off ✓",
+    ("humidifier", "turn_on"): "Humidifier on ✓",
+    ("humidifier", "turn_off"): "Humidifier off ✓",
 }
 
 GENERIC_OK = "Done ✓"

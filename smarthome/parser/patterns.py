@@ -26,6 +26,7 @@ DEVICE_SYNONYMS = {
     "geyser": ["geyser", "geezer", "water heater", "heater", "boiler",
                "गीजर", "गीज़र", "हीटर", "वॉटर हीटर", "बॉयलर"],
     "plug": ["plug", "socket", "switch", "प्लग", "सॉकेट", "स्विच"],
+    "humidifier": ["humidifier", "humidifer", "humidify", "humid", "ह्यूमिडिफायर", "नमी"],
 }
 
 ON_WORDS = ["on", "chalu", "chaalu", "start", "jala", "jalao", "chala", "chalao", "lagao",
@@ -54,6 +55,9 @@ HELP_PHRASES = (
 
 # Cap auto-off duration to a sane maximum (24h) to avoid runaway timers.
 MAX_DURATION_MINUTES = 24 * 60
+
+# Common humidifier mist/preset modes (device-specific; LLM handles the rest).
+MIST_MODES = ("high", "medium", "low", "auto", "sleep", "continuous", "intermittent", "baby")
 
 # Scene trigger phrases (in addition to the scene name itself).
 SCENE_PHRASES = {
@@ -134,6 +138,20 @@ def match(text: str) -> Intent | None:
     # 0-) Help / menu / what can I control.
     if any(p in norm for p in HELP_PHRASES):
         return Intent(action="help", confidence="high", source="pattern")
+
+    # 0a-) Humidifier: set humidity level ("set humidity to 60", "humidity 50%").
+    if "humidity" in norm:
+        m = re.search(r"(\d{1,3})", norm)
+        if m and 0 <= int(m.group(1)) <= 100:
+            return Intent(action="set_humidity", device="humidifier",
+                          humidity=int(m.group(1)), confidence="high", source="pattern")
+
+    # 0a-) Humidifier: mist / preset mode ("mist high", "mist mode sleep").
+    if "mist" in norm:
+        for mode in MIST_MODES:
+            if _contains_word(norm, mode):
+                return Intent(action="set_mode", device="humidifier",
+                              mode=mode, confidence="high", source="pattern")
 
     # 0) Energy / usage / bill enquiry.
     if any(w in norm for w in ("energy", "usage", "electricity", "bijli", "bill", "consumption", "units",

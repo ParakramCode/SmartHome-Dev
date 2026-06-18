@@ -78,6 +78,16 @@ class HomeAssistantClient:
             "climate", "set_temperature", entity_id, temperature=temp
         )
 
+    async def set_humidity(self, entity_id: str, pct: int) -> bool:
+        return await self._call_service(
+            "humidifier", "set_humidity", entity_id, humidity=pct
+        )
+
+    async def set_mode(self, entity_id: str, mode: str) -> bool:
+        return await self._call_service(
+            "humidifier", "set_mode", entity_id, mode=mode
+        )
+
     # ------------------------------------------------------------------
     # State queries
     # ------------------------------------------------------------------
