@@ -12,6 +12,7 @@ can fall back to a pattern-only flow.
 
 from __future__ import annotations
 
+import re
 import json
 import asyncio
 import logging
@@ -27,6 +28,21 @@ MAX_TOKENS = 512
 
 # Lazily-created client (only if the LLM is enabled).
 _client = None
+
+
+def _extract_json(text: str) -> dict | None:
+    """Parse the model output as JSON, tolerating prose around an embedded object."""
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+    return None
 
 
 def _get_client():
@@ -102,6 +118,9 @@ Schema:
     for an English message, and do NOT switch languages based on earlier messages.
 12. Keep replies short, friendly, conversational — like a helpful housemate.
 13. For locks use action "lock"/"unlock", not "turn_on"/"turn_off".
+15. Small talk: for greetings, thanks, or chit-chat (not a device command), use
+    action "unclear" with a short, friendly conversational reply in the user's
+    language (e.g. "You're welcome!"). Still return valid JSON.
 14. PRONOUNS / context: if the user refers to a device implicitly ("it", "that",
     "ise", "usse", "wahi") without naming one, infer it from recent messages —
     pick the most recently mentioned device that the requested action sensibly
@@ -159,7 +178,15 @@ async def parse(user_message: str, conversation_history: list[dict]) -> Intent |
             json_str = json_str.split("\n", 1)[-1]
             json_str = json_str.rsplit("```", 1)[0].strip()
 
-        data = json.loads(json_str)
+        data = _extract_json(json_str)
+        if data is None:
+            # The model replied in plain prose (e.g. "You're welcome!") instead
+            # of JSON — common for greetings/thanks/small talk. Use it as the
+            # conversational reply rather than erroring out.
+            if raw_text:
+                logger.info("LLM returned prose; using it as a conversational reply.")
+                return Intent(action="unclear", reply=raw_text[:500], confidence="low", source="llm")
+            return fallback()
         if not {"action", "reply"}.issubset(data.keys()):
             logger.warning("LLM response missing required keys: %s", data)
             return fallback()
@@ -167,9 +194,6 @@ async def parse(user_message: str, conversation_history: list[dict]) -> Intent |
 
     except asyncio.TimeoutError:
         logger.error("LLM call timed out after 25s")
-        return fallback()
-    except json.JSONDecodeError as exc:
-        logger.error("LLM JSON parse failed: %s — raw: %s", exc, raw_text)
         return fallback()
     except Exception as exc:
         logger.exception("LLM unexpected error: %s", exc)
